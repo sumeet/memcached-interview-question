@@ -1,3 +1,14 @@
+# Solution for "The best engineering interview question I’ve ever gotten"
+
+From https://quuxplusone.github.io/blog/2022/01/06/memcached-interview/
+
+The assignment is to add an atomic "MULT" command to memcached, and the code change I made is at: https://github.com/sumeet/memcached-interview-question/commit/1f90c66d9c0f107df6d458c1f5d4d6b4d7c7c3b2
+
+
+![screenshot](./screenshot.png)
+
+---
+
 # Memcached
 
 Memcached is a high performance multithreaded event-based key/value cache
