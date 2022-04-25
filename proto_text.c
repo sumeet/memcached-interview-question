@@ -1696,7 +1696,7 @@ static void process_marithmetic_command(conn *c, token_t *tokens, const size_t n
     // If no argument supplied, incr or decr by one.
     of.delta = 1;
     of.initial = 0; // redundant, for clarity.
-    bool incr = true; // default mode is to increment.
+    enum delta_arith_type delta_arith_type = DELTA_INCR; // default mode is to increment.
     bool locked = false;
     uint32_t hv = 0;
     item *it = NULL; // item returned by do_add_delta.
@@ -1732,11 +1732,11 @@ static void process_marithmetic_command(conn *c, token_t *tokens, const size_t n
             break;
         case 'I': // Incr (default)
         case '+':
-            incr = true;
+            delta_arith_type = DELTA_INCR;
             break;
         case 'D': // Decr.
         case '-':
-            incr = false;
+            delta_arith_type = DELTA_DECR;
             break;
         default:
             errstr = "CLIENT_ERROR invalid mode for ma M token";
@@ -1754,7 +1754,7 @@ static void process_marithmetic_command(conn *c, token_t *tokens, const size_t n
     // return a referenced item if it exists, so we can modify it here, rather
     // than adding even more parameters to do_add_delta.
     bool item_created = false;
-    switch(do_add_delta(c, key, nkey, incr, of.delta, tmpbuf, &of.req_cas_id, hv, &it)) {
+    switch(do_add_delta(c, key, nkey, delta_arith_type, of.delta, tmpbuf, &of.req_cas_id, hv, &it)) {
     case OK:
         if (c->noreply)
             resp->skip = true;
@@ -1793,9 +1793,9 @@ static void process_marithmetic_command(conn *c, token_t *tokens, const size_t n
             }
         } else {
             pthread_mutex_lock(&c->thread->stats.mutex);
-            if (incr) {
+            if (delta_arith_type == DELTA_INCR) {
                 c->thread->stats.incr_misses++;
-            } else {
+            } else if (delta_arith_type == DELTA_DECR){
                 c->thread->stats.decr_misses++;
             }
             pthread_mutex_unlock(&c->thread->stats.mutex);
@@ -2061,7 +2061,7 @@ static void process_touch_command(conn *c, token_t *tokens, const size_t ntokens
     }
 }
 
-static void process_arithmetic_command(conn *c, token_t *tokens, const size_t ntokens, const bool incr) {
+static void process_arithmetic_command(conn *c, token_t *tokens, const size_t ntokens, enum delta_arith_type delta_arith_type) {
     char temp[INCR_MAX_STORAGE_LEN];
     uint64_t delta;
     char *key;
@@ -2084,7 +2084,7 @@ static void process_arithmetic_command(conn *c, token_t *tokens, const size_t nt
         return;
     }
 
-    switch(add_delta(c, key, nkey, incr, delta, temp, NULL)) {
+    switch(add_delta(c, key, nkey, delta_arith_type, delta, temp, NULL)) {
     case OK:
         out_string(c, temp);
         break;
@@ -2096,9 +2096,9 @@ static void process_arithmetic_command(conn *c, token_t *tokens, const size_t nt
         break;
     case DELTA_ITEM_NOT_FOUND:
         pthread_mutex_lock(&c->thread->stats.mutex);
-        if (incr) {
+        if (delta_arith_type == DELTA_INCR) {
             c->thread->stats.incr_misses++;
-        } else {
+        } else if (delta_arith_type == DELTA_DECR) {
             c->thread->stats.decr_misses++;
         }
         pthread_mutex_unlock(&c->thread->stats.mutex);
@@ -2833,7 +2833,7 @@ void process_command_ascii(conn *c, char *command) {
         if (strcmp(tokens[COMMAND_TOKEN].value, "incr") == 0) {
 
             WANT_TOKENS_OR(ntokens, 4, 5);
-            process_arithmetic_command(c, tokens, ntokens, 1);
+            process_arithmetic_command(c, tokens, ntokens, DELTA_INCR);
         } else {
             out_string(c, "ERROR");
         }
@@ -2845,7 +2845,7 @@ void process_command_ascii(conn *c, char *command) {
         } else if (strcmp(tokens[COMMAND_TOKEN].value, "decr") == 0) {
 
             WANT_TOKENS_OR(ntokens, 4, 5);
-            process_arithmetic_command(c, tokens, ntokens, 0);
+            process_arithmetic_command(c, tokens, ntokens, DELTA_DECR);
 #ifdef MEMCACHED_DEBUG
         } else if (strcmp(tokens[COMMAND_TOKEN].value, "debugtime") == 0) {
             WANT_TOKENS_MIN(ntokens, 2);
@@ -2917,6 +2917,9 @@ void process_command_ascii(conn *c, char *command) {
     } else if (strcmp(tokens[COMMAND_TOKEN].value, "refresh_certs") == 0) {
         process_refresh_certs_command(c, tokens, ntokens);
 #endif
+    } else if (strcmp(tokens[COMMAND_TOKEN].value, "mult") == 0) {
+        WANT_TOKENS_OR(ntokens, 4, 5);
+        process_arithmetic_command(c, tokens, ntokens, DELTA_MULT);
     } else {
         if (strncmp(tokens[ntokens - 2].value, "HTTP/", 5) == 0) {
             conn_set_state(c, conn_closing);

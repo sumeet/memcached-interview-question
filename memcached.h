@@ -900,8 +900,15 @@ extern void *ext_storage;
  * Functions
  */
 void do_accept_new_conns(const bool do_accept);
+
+enum delta_arith_type {
+    DELTA_INCR,
+    DELTA_DECR,
+    DELTA_MULT,
+};
+
 enum delta_result_type do_add_delta(conn *c, const char *key,
-                                    const size_t nkey, const bool incr,
+                                    const size_t nkey, const enum delta_arith_type delta_arith_type,
                                     const int64_t delta, char *buf,
                                     uint64_t *cas, const uint32_t hv,
                                     item **it_ret);
@@ -948,7 +955,7 @@ void sidethread_conn_close(conn *c);
 
 /* Lock wrappers for cache functions that are called from main loop. */
 enum delta_result_type add_delta(conn *c, const char *key,
-                                 const size_t nkey, bool incr,
+                                 const size_t nkey, enum delta_arith_type delta_arith_type,
                                  const int64_t delta, char *buf,
                                  uint64_t *cas);
 void accept_new_conns(const bool do_accept);
